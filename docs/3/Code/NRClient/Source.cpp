@@ -1,0 +1,735 @@
+#include <wx/wxprec.h>
+#include <wx/frame.h>
+#include <wx/grid.h>
+#include <wx/textctrl.h>
+#include <wx/panel.h>
+#include <wx/sizer.h>
+#include <wx/button.h>
+#include <wx/wfstream.h>
+#include <wx/textfile.h>
+#include <wx/filedlg.h>
+#include <sstream>
+#include <msclr\marshal_cppstd.h>
+
+#ifndef WX_PRECOMP
+    #include <wx/wx.h>
+#endif
+
+using namespace std;
+using namespace System;
+using namespace System::Collections::Generic;
+using namespace System::Runtime::Remoting;
+using namespace NETRem;
+
+class MyApp : public wxApp
+{
+public:
+    virtual bool OnInit();
+};
+
+class MyFrame : public wxFrame
+{
+public:
+    MyFrame();
+
+private:
+    void OnOpen(wxCommandEvent& event);
+    void OnSave(wxCommandEvent& event);
+    void OnJoin(wxCommandEvent& event);
+    void OnExit(wxCommandEvent& event);
+    void OnDatabaseSelected(wxCommandEvent& event);
+    void OnAddDatabaseView(wxCommandEvent& event);
+    void OnAddDatabase(wxCommandEvent& event);
+    void OnDeleteDatabase(wxCommandEvent& event);
+    void OnTableSelected(wxCommandEvent& event);
+    void OnAddTableView(wxCommandEvent& event);
+    void OnAddTable(wxCommandEvent& event);
+    void OnDeleteTable(wxCommandEvent& event);
+    void OnAddColumnView(wxCommandEvent& event);
+    void OnAddColumn(wxCommandEvent& event);
+    void OnDeleteColumn(wxCommandEvent& event);
+    void OnAddRow(wxCommandEvent& event);
+    void OnDeleteRow(wxCommandEvent& event);
+    void OnGridChanged(wxGridEvent& event);
+    void OnJoinDatabaseSelected(wxCommandEvent& event);
+    void OnJoinFTableSelected(wxCommandEvent& event);
+    void OnJoinSTableSelected(wxCommandEvent& event);
+    void OnJoinFColumnSelected(wxCommandEvent& event);
+    void OnJoinAllSelected(wxCommandEvent& event);
+};
+
+enum
+{
+    ID_Open = 1,
+    ID_Save,
+    ID_Join,
+    ID_DatabaseSelected,
+    ID_TableSelected,
+    ID_AddDatabaseName,
+    ID_AddDatabaseButton,
+    ID_AddDatabaseViewButton,
+    ID_DeleteDatabaseButton,
+    ID_AddTableName,
+    ID_AddTableButton,
+    ID_AddTableViewButton,
+    ID_DeleteTableButton,
+    ID_AddColumnName,
+    ID_AddColumnViewButton,
+    ID_AddColumnButton,
+    ID_DeleteColumnButton,
+    ID_ColumnSelected,
+    ID_AddRowButton,
+    ID_DeleteRowButton,
+    ID_GridChanged,
+    ID_JoinDatabaseSelected,
+    ID_JoinFTableSelected,
+    ID_JoinFColumnSelected,
+    ID_JoinSTableSelected,
+    ID_JoinSColumnSelected,
+    ID_JoinAllButton
+};
+
+wxIMPLEMENT_APP(MyApp);
+ref struct GlobalObjects{static Manager^ m;};
+wxArrayString databasesName;
+wxArrayString tablesName;
+
+wxWindow *window;
+wxComboBox *databaseBox;
+wxComboBox *tableBox;
+wxGrid *grid;
+wxButton *addDatabase;
+wxTextCtrl *addDatabaseName;
+wxStaticText *databaseNameUsed;
+wxButton *addTable;
+wxTextCtrl *addTableName;
+wxStaticText *tableNameUsed;
+
+wxComboBox *columnBox;
+wxButton *addColumn;
+wxTextCtrl *addColumnName;
+wxStaticText *columnNameUsed;
+wxArrayString columnName;
+
+wxDialog *joinTablesDialog;
+wxComboBox *joinDatabaseBox;
+wxComboBox *joinFTableBox;
+wxComboBox *joinSTableBox;
+wxComboBox *joinFColumnBox;
+wxComboBox *joinSColumnBox;
+wxButton *joinAll;
+wxStaticText* joinDatabaseText;
+wxStaticText* joinFTableText;
+wxStaticText* joinSTableText;
+wxStaticText* joinFColumnText;
+wxStaticText* joinSColumnText;
+
+bool MyApp::OnInit()
+{
+    RemotingConfiguration::Configure("..\\NRClient\\app.config", false);
+    GlobalObjects::m = gcnew Manager();
+    Manager^ m = GlobalObjects::m;
+
+    m->AddDatabase("1");
+    m->AddDatabase("asd");
+    Database^ a = m->GetDatabase("1");
+    a->AddTable("1");
+    a->AddTable("2");
+    a->AddTable("3");
+    Table^ t = a->GetTable("1");
+    Table^ t1 = a->GetTable("2");
+    t->AddColumn("1", "int");
+    t1->AddColumn("11", "int");
+    t1->AddColumn("s", "string");
+    t->AddColumn("2", "double");
+    t->AddColumn("3", "char");
+    t->AddColumn("4", "string");
+    t->AddColumn("5", "hex");
+    t->AddColumn("6", "hexInvl");
+    t->AddRow();
+    t->AddRow();
+    t->AddRow();
+    t->AddRow();
+    t1->AddRow();
+    Row^ r = t->GetRow(0);
+    Row^ r1 = t->GetRow(1);
+    Row^ r2 = t1->GetRow(0);
+    r->ChangeData("5", 0);
+    r->ChangeData("5,5", 1);
+    r->ChangeData("a", 2);
+    r->ChangeData("abc", 3);
+    r->ChangeData("#98F1A2", 4);
+    r->ChangeData("#A1A1A1#BBBBBB", 5);
+    r1->ChangeData("5", 0);
+    r2->ChangeData("5", 0);
+    r2->ChangeData("aaa", 1);
+
+    columnName.Add("int");
+    columnName.Add("double");
+    columnName.Add("char");
+    columnName.Add("string");
+    columnName.Add("hex");
+    columnName.Add("hexInvl");
+
+    List<String^>^ databases = m->GetDatabases();
+
+    for (int i=0; i<databases->Count; i++)
+        databasesName.Add(msclr::interop::marshal_as<std::string>(databases[i]));
+
+    MyFrame *frame = new MyFrame();
+    frame->Show(true);
+
+    return true;
+}
+
+MyFrame::MyFrame() : wxFrame(NULL, wxID_ANY, "DBMS", wxDefaultPosition, wxSize(1000, 600))
+{
+    window = new wxWindow(this, wxID_ANY);
+
+    wxMenu *menuFile = new wxMenu;
+    //menuFile->Append(ID_Open, "Open", "Open file");
+    //menuFile->Append(ID_Save, "Save", "Save file");
+    menuFile->AppendSeparator();
+    menuFile->Append(wxID_EXIT);
+
+    wxMenu *menuJoin = new wxMenu;
+    menuJoin->Append(ID_Join, "Join", "Join tables");
+
+    wxMenuBar *menuBar = new wxMenuBar;
+    menuBar->Append(menuFile, "&File");
+    menuBar->Append(menuJoin, "&Operation");
+
+    SetMenuBar( menuBar );
+
+    CreateStatusBar();
+
+    Bind(wxEVT_MENU, &MyFrame::OnOpen, this, ID_Open);
+    Bind(wxEVT_MENU, &MyFrame::OnSave, this, ID_Save);
+    Bind(wxEVT_MENU, &MyFrame::OnJoin, this, ID_Join);
+    Bind(wxEVT_MENU, &MyFrame::OnExit, this, wxID_EXIT);
+
+    wxStaticText* databaseText = new wxStaticText(window, wxID_ANY, "Database:", wxPoint(0, 0));
+    databaseBox = new wxComboBox(window, ID_DatabaseSelected, wxEmptyString, wxPoint(60, 0), wxSize(110, 20), databasesName, wxCB_READONLY);
+    wxStaticText* tableText = new wxStaticText(window, wxID_ANY, "Table:", wxPoint(0, 30));
+    tableBox = new wxComboBox(window, ID_TableSelected, wxEmptyString, wxPoint(60,30), wxSize(110, 20), tablesName, wxCB_READONLY);
+
+    wxButton *addDatabaseView = new wxButton(window, ID_AddDatabaseViewButton, "+", wxPoint(180, 0), wxSize(20, 20));
+    wxButton *deleteDatabase = new wxButton(window, ID_DeleteDatabaseButton, "-", wxPoint(210, 0), wxSize(20, 20));
+    wxButton *addTableView = new wxButton(window, ID_AddTableViewButton, "+", wxPoint(180, 30), wxSize(20, 20));
+    wxButton *deleteTable = new wxButton(window, ID_DeleteTableButton, "-", wxPoint(210, 30), wxSize(20, 20));
+
+    wxStaticText *rowsEdit = new wxStaticText(window, wxID_ANY, "Rows:", wxPoint(560,0));
+    wxButton *addRow = new wxButton(window, ID_AddRowButton, "+", wxPoint(600, 0), wxSize(20, 20));
+    wxButton *deleteRow = new wxButton(window, ID_DeleteRowButton, "-", wxPoint(600, 30), wxSize(20, 20));
+
+    wxStaticText *columnsEdit = new wxStaticText(window, wxID_ANY, "Columns:", wxPoint(640,0));
+    wxButton *addColumnView = new wxButton(window, ID_AddColumnViewButton, "+", wxPoint(700, 0), wxSize(20, 20));
+    wxButton *deleteColumn = new wxButton(window, ID_DeleteColumnButton, "-", wxPoint(700, 30), wxSize(20, 20));
+
+    grid = new wxGrid(window, ID_GridChanged, wxPoint(0, 60), wxSize(930, 440));
+    grid->CreateGrid(1, 1);
+
+    databaseBox->Bind(wxEVT_COMBOBOX, &MyFrame::OnDatabaseSelected, this, ID_DatabaseSelected);
+    tableBox->Bind(wxEVT_COMBOBOX, &MyFrame::OnTableSelected, this, ID_TableSelected);
+    addDatabaseView->Bind(wxEVT_BUTTON, &MyFrame::OnAddDatabaseView, this, ID_AddDatabaseViewButton);
+    deleteDatabase->Bind(wxEVT_BUTTON, &MyFrame::OnDeleteDatabase, this, ID_DeleteDatabaseButton);
+    addTableView->Bind(wxEVT_BUTTON, &MyFrame::OnAddTableView, this, ID_AddTableViewButton);
+    deleteTable->Bind(wxEVT_BUTTON, &MyFrame::OnDeleteTable, this, ID_DeleteTableButton);
+
+    addColumnView->Bind(wxEVT_BUTTON, &MyFrame::OnAddColumnView, this, ID_AddColumnViewButton);
+    deleteColumn->Bind(wxEVT_BUTTON, &MyFrame::OnDeleteColumn, this, ID_DeleteColumnButton);
+    addRow->Bind(wxEVT_BUTTON, &MyFrame::OnAddRow, this, ID_AddRowButton);
+    deleteRow->Bind(wxEVT_BUTTON, &MyFrame::OnDeleteRow, this, ID_DeleteRowButton);
+
+    grid->Bind(wxEVT_GRID_CELL_CHANGED, &MyFrame::OnGridChanged, this, ID_GridChanged);
+}
+
+void MyFrame::OnExit(wxCommandEvent& event)
+{
+    Close(true);
+}
+
+void RenderGrid()
+{
+    Manager^ m = GlobalObjects::m;
+    grid->ClearGrid();
+    if (grid->GetNumberCols() != 0) grid->DeleteCols(0, grid->GetNumberCols());
+    if (grid->GetNumberRows() != 0) grid->DeleteRows(0, grid->GetNumberRows());
+    string database = databaseBox->GetStringSelection().ToStdString();
+    string table = string(tableBox->GetStringSelection());
+    List<String^>^ columns = m->GetDatabase(gcnew String(database.data()))->GetTable(gcnew String(table.data()))->GetColumns();
+    int rows = m->GetDatabase(gcnew String(database.data()))->GetTable(gcnew String(table.data()))->GetRows();
+    grid->AppendCols(columns->Count);
+    grid->AppendRows(rows);
+    for (int i=0; i<columns->Count; i++)
+        grid->SetColLabelValue(i, msclr::interop::marshal_as<std::string>(columns[i]));
+
+    for (int i=0; i<rows; i++)
+        for (int j = 0; j < columns->Count; j++)
+        {
+            string value = msclr::interop::marshal_as<std::string>(m->GetDatabase(gcnew String(database.data()))->GetTable(gcnew String(database.data()))->GetRow(i)->GetData(j));
+            grid->SetCellValue(i, j, value);
+            if (msclr::interop::marshal_as<std::string>(m->GetDatabase(gcnew String(database.data()))->GetTable(gcnew String(table.data()))->GetColumn(columns[j])->GetType()) == "hex")
+            {
+                int col[7] = {20, 15, 0, 15, 0, 15, 0};
+                if (value.size() == 7)
+                    for (int i = 1; i < 7; i++)
+                    {
+                        int toI = 48;
+                        if ((int)value[i] > 64 && (int)value[i] < 71) toI = 55;
+                        col[i] = (int)value[i] - toI;
+                    }
+                grid->SetCellBackgroundColour(i, j, wxColour(col[1]*16+col[2], col[3] * 16 + col[4], col[5] * 16 + col[6], col[0]));
+            }
+        }
+}
+
+void RenderFrame()
+{
+    Manager^ m = GlobalObjects::m;
+    List<String^>^ names = m->GetDatabases();
+    databaseBox->Clear();
+    for (int i=0; i<names->Count; i++)
+        databaseBox->Append(msclr::interop::marshal_as<std::string>(names[i]));
+}
+
+void MyFrame::OnOpen(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    if (wxMessageBox(_("Not saved data will be lost! Proceed?"), _("Please confirm"), wxICON_QUESTION | wxYES_NO, this) == wxNO )
+        return;
+
+    wxFileDialog openFileDialog(this, _("Open file"), "", "", "*.txt", wxFD_OPEN|wxFD_FILE_MUST_EXIST);
+    if (openFileDialog.ShowModal() == wxID_CANCEL) return;
+
+    wxTextFile file;
+    file.Open(openFileDialog.GetPath());
+
+    m->DeleteDatabases();
+    string curLine;
+    string database;
+    string table;
+    string columns;
+    string value;
+    String^ curLineS;
+    String^ databaseS;
+    String^ tableS;
+    String^ columnsS;
+    String^ valueS;
+
+    curLine = file.GetFirstLine();
+
+    while (!file.Eof())
+    {
+        if(curLine.substr(0, 9) == "Database:")
+        {
+            database = curLine.substr(10);
+            databaseS = gcnew String(database.data());
+            m->AddDatabase(databaseS);
+        }
+        else if(curLine.substr(0, 6) == "Table:")
+        {
+            table = curLine.substr(7);
+            tableS = gcnew String(table.data());
+            m->GetDatabase(databaseS)->AddTable(tableS);
+        }
+        else if(curLine.substr(0, 8) == "Columns:")
+        {
+            string types;
+            string type;
+            String^ typeS;
+            types = file.GetNextLine();
+            stringstream curStream(curLine.substr(9));
+            stringstream curType(types);
+            while (getline(curStream, columns, ' ') && getline(curType, type, ' '))
+            {
+                columnsS = gcnew String(columns.data());
+                typeS = gcnew String(type.data());
+                m->GetDatabase(databaseS)->GetTable(tableS)->AddColumn(columnsS, typeS);
+            }
+        }
+        else if(curLine == "\n") {continue;}
+        else
+        {
+            stringstream curStream(curLine);
+            m->GetDatabase(databaseS)->GetTable(tableS)->AddRow();
+            int columnIndex=0;
+            while(getline(curStream, value, ' '))
+            {
+                valueS = gcnew String(value.data());
+                m->GetDatabase(databaseS)->GetTable(tableS)->GetRow(m->GetDatabase(databaseS)->GetTable(tableS)->GetRows()-1)->ChangeData(valueS, columnIndex);
+                columnIndex++;
+            }
+        }
+        curLine = file.GetNextLine();
+    }
+    RenderFrame();
+}
+
+void MyFrame::OnSave(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    wxFileDialog* saveFileDialog = new wxFileDialog(window, "Save file", "", "", "*.txt", wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+    if (saveFileDialog->ShowModal() == wxID_CANCEL) return;
+    List<String^>^ databases = m->GetDatabases();
+
+    wxFile file( saveFileDialog->GetPath(), wxFile::write);
+    if(file.IsOpened())
+    {
+        for (int i=0; i<databases->Count; i++)
+        {
+            file.Write("Database: "+ msclr::interop::marshal_as<std::string>(databases[i])+"\n");
+            List<String^>^ tables = m->GetDatabase(databases[i])->GetTables();
+            for (int j=0; j<tables->Count; j++)
+            {
+                file.Write("Table: "+ msclr::interop::marshal_as<std::string>(tables[j])+"\n");
+                List<String^>^ columns = m->GetDatabase(databases[i])->GetTable(tables[j])->GetColumns();
+                if (columns->Count == 0) continue;
+                file.Write("Columns: ");
+                for (int k=0; k<columns->Count; k++) file.Write(msclr::interop::marshal_as<std::string>(columns[k])+" ");
+                file.Write("\n");
+                for (int k=0; k<columns->Count; k++)
+                    file.Write(msclr::interop::marshal_as<std::string>(m->GetDatabase(databases[i])->GetTable(tables[j])->GetColumn(columns[k])->GetType())+" ");
+                file.Write("\n");
+                int rows = m->GetDatabase(databases[i])->GetTable(tables[j])->GetRows();
+                for (int k=0; k<rows; k++)
+                {
+                    for (int l=0; l<columns->Count; l++)
+                    {
+                        file.Write(msclr::interop::marshal_as<std::string>(m->GetDatabase(databases[i])->GetTable(tables[j])->GetRow(k)->GetData(l))+" ");
+                    }
+                    file.Write("\n");
+                }
+                file.Write("\n");
+            }
+        }
+    }
+}
+
+void MyFrame::OnJoin(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    joinTablesDialog = new wxDialog(this, wxID_ANY, "Join tables", wxDefaultPosition, wxSize(400, 150));
+    joinTablesDialog->Show(true);
+    wxArrayString emptyArrayString;
+
+    joinDatabaseText = new wxStaticText(joinTablesDialog, wxID_ANY, "Database:", wxPoint(0, 0));
+    joinDatabaseBox = new wxComboBox(joinTablesDialog, ID_JoinDatabaseSelected, wxEmptyString, wxPoint(60, 0), wxSize(110, 20), emptyArrayString, wxCB_READONLY);
+    List<String^>^ databases = m->GetDatabases();
+    for (int i=0; i<databases->Count; i++)
+        joinDatabaseBox->Append(msclr::interop::marshal_as<std::string>(databases[i]));
+
+    joinFTableText = new wxStaticText(joinTablesDialog, wxID_ANY, "First table:", wxPoint(0, 30));
+    joinFTableBox = new wxComboBox(joinTablesDialog, ID_JoinFTableSelected, wxEmptyString, wxPoint(60,30), wxSize(110, 20), emptyArrayString, wxCB_READONLY);
+    joinFColumnText = new wxStaticText(joinTablesDialog, wxID_ANY, "Column:", wxPoint(0, 60));
+    joinFColumnBox = new wxComboBox(joinTablesDialog, ID_JoinFColumnSelected, wxEmptyString, wxPoint(60,60), wxSize(110, 20), emptyArrayString, wxCB_READONLY);
+
+    joinSTableText = new wxStaticText(joinTablesDialog, wxID_ANY, "Second table:", wxPoint(180, 30));
+    joinSTableBox = new wxComboBox(joinTablesDialog, ID_JoinSTableSelected, wxEmptyString, wxPoint(260,30), wxSize(110, 20), emptyArrayString, wxCB_READONLY);
+    joinSColumnText = new wxStaticText(joinTablesDialog, wxID_ANY, "Column:", wxPoint(205, 60));
+    joinSColumnBox = new wxComboBox(joinTablesDialog, ID_JoinSColumnSelected, wxEmptyString, wxPoint(260,60), wxSize(110, 20), emptyArrayString, wxCB_READONLY);
+
+    joinAll = new wxButton(joinTablesDialog, ID_JoinAllButton, "OK", wxPoint(185, 90), wxSize(30, 20));
+
+    joinDatabaseBox->Bind(wxEVT_COMBOBOX, &MyFrame::OnJoinDatabaseSelected, this, ID_JoinDatabaseSelected);
+    joinFTableBox->Bind(wxEVT_COMBOBOX, &MyFrame::OnJoinFTableSelected, this, ID_JoinFTableSelected);
+    joinSTableBox->Bind(wxEVT_COMBOBOX, &MyFrame::OnJoinSTableSelected, this, ID_JoinSTableSelected);
+    joinFColumnBox->Bind(wxEVT_COMBOBOX, &MyFrame::OnJoinFColumnSelected, this, ID_JoinFColumnSelected);
+    joinAll->Bind(wxEVT_BUTTON, &MyFrame::OnJoinAllSelected, this, ID_JoinAllButton);
+}
+
+void MyFrame::OnJoinDatabaseSelected(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    joinFTableBox->Clear();
+    String^ databaseS = gcnew String(string(joinDatabaseBox->GetStringSelection()).data());
+    List<String^>^ tables = m->GetDatabase(databaseS)->GetTables();
+    for (int i=0; i<tables->Count; i++)
+        joinFTableBox->Append(msclr::interop::marshal_as<std::string>(tables[i]));
+}
+
+void MyFrame::OnJoinFTableSelected(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    joinSTableBox->Clear();
+    List<String^>^ tables = m->GetDatabase(gcnew String(string(joinDatabaseBox->GetStringSelection()).data()))->GetTables();
+    for (int i=0; i<tables->Count; i++)
+        if (msclr::interop::marshal_as<std::string>(tables[i]) != string(joinFTableBox->GetValue()))
+            joinSTableBox->Append(msclr::interop::marshal_as<std::string>(tables[i]));
+
+    joinFColumnBox->Clear();
+    List<String^>^ columns = m->GetDatabase(gcnew String(string(joinDatabaseBox->GetStringSelection()).data()))->GetTable(gcnew String(string(joinFTableBox->GetStringSelection()).data()))->GetColumns();
+    for (int i=0; i<columns->Count; i++)
+        joinFColumnBox->Append(msclr::interop::marshal_as<std::string>(columns[i]));
+}
+
+void MyFrame::OnJoinSTableSelected(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    if (string(joinFColumnBox->GetValue()) != "")
+    {
+        joinSColumnBox->Clear();
+        List<String^>^ columns = m->GetDatabase(gcnew String(string(joinDatabaseBox->GetStringSelection()).data()))->GetTable(gcnew String(string(joinSTableBox->GetStringSelection()).data()))->GetColumns();
+        String^ type = m->GetDatabase(gcnew String(string(joinDatabaseBox->GetStringSelection()).data()))->GetTable(gcnew String(string(joinFTableBox->GetStringSelection()).data()))->GetColumn(gcnew String(string(joinFColumnBox->GetStringSelection()).data()))->GetType();
+        for (int i=0; i<columns->Count; i++)
+            if(m->GetDatabase(gcnew String(string(joinDatabaseBox->GetStringSelection()).data()))->GetTable(gcnew String(string(joinSTableBox->GetStringSelection()).data()))->GetColumn(columns[i])->GetType() == type)
+                joinSColumnBox->Append(msclr::interop::marshal_as<std::string>(columns[i]));
+    }
+}
+
+void MyFrame::OnJoinFColumnSelected(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    if (string(joinSTableBox->GetValue()) != "")
+    {
+        joinSColumnBox->Clear();
+        List<String^>^ columns = m->GetDatabase(gcnew String(string(joinDatabaseBox->GetStringSelection()).data()))->GetTable(gcnew String(string(joinSTableBox->GetStringSelection()).data()))->GetColumns();
+        String^ type = m->GetDatabase(gcnew String(string(joinDatabaseBox->GetStringSelection()).data()))->GetTable(gcnew String(string(joinFTableBox->GetStringSelection()).data()))->GetColumn(gcnew String(string(joinFColumnBox->GetStringSelection()).data()))->GetType();
+        for (int i=0; i<columns->Count; i++)
+            if(m->GetDatabase(gcnew String(string(joinDatabaseBox->GetStringSelection()).data()))->GetTable(gcnew String(string(joinSTableBox->GetStringSelection()).data()))->GetColumn(columns[i])->GetType() == type)
+                joinSColumnBox->Append(msclr::interop::marshal_as<std::string>(columns[i]));
+    }
+}
+
+void MyFrame::OnJoinAllSelected(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    Table^ joinTable = m->GetDatabase(gcnew String(string(joinDatabaseBox->GetStringSelection()).data()))->JoinTables(gcnew String(string(joinFTableBox->GetStringSelection()).data()),
+                                                                                              gcnew String(string(joinSTableBox->GetStringSelection()).data()),
+                                                                                              gcnew String(string(joinFColumnBox->GetStringSelection()).data()),
+                                                                                              gcnew String(string(joinSColumnBox->GetStringSelection()).data()));
+    joinTablesDialog->SetSize(wxSize(800, 600));
+    delete joinDatabaseBox;
+    delete joinFTableBox;
+    delete joinSTableBox;
+    delete joinFColumnBox;
+    delete joinSColumnBox;
+    delete joinDatabaseText;
+    delete joinFTableText;
+    delete joinSTableText;
+    delete joinFColumnText;
+    delete joinSColumnText;
+    delete joinAll;
+
+    wxGrid *joinGrid = new wxGrid(joinTablesDialog, wxID_ANY, wxDefaultPosition, wxSize(780, 550));
+    joinGrid->CreateGrid(0, 0);
+
+    List<String^>^ columns = joinTable->GetColumns();
+    int rows = joinTable->GetRows();
+    joinGrid->AppendCols(columns->Count);
+    joinGrid->AppendRows(rows);
+    for (int i=0; i<columns->Count; i++)
+        joinGrid->SetColLabelValue(i, msclr::interop::marshal_as<std::string>(columns[i]));
+
+    for (int i=0; i<rows; i++)
+        for (int j=0; j<columns->Count; j++)
+            joinGrid->SetCellValue(i, j, msclr::interop::marshal_as<std::string>(joinTable->GetRow(i)->GetData(j)));
+}
+
+void MyFrame::OnDatabaseSelected(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    tableBox->Clear();
+    string database = string(databaseBox->GetStringSelection());
+    String^ databaseS = gcnew String(database.data());
+    List<String^>^ tables = m->GetDatabase(databaseS)->GetTables();
+    for (int i=0; i<tables->Count; i++)
+        tableBox->Append(msclr::interop::marshal_as<std::string>(tables[i]));
+}
+
+void MyFrame::OnTableSelected(wxCommandEvent& event)
+{
+    RenderGrid();
+}
+
+void MyFrame::OnAddDatabaseView(wxCommandEvent& event)
+{
+    addDatabaseName = new wxTextCtrl(window, ID_AddDatabaseName, wxEmptyString, wxPoint(260,0), wxSize(110, 20));
+    addDatabase = new wxButton(window, ID_AddDatabaseButton, "+", wxPoint(380, 0), wxSize(20, 20));
+    databaseNameUsed = new wxStaticText(window, wxID_ANY, "", wxPoint(410,0));
+    addDatabase->Bind(wxEVT_BUTTON, &MyFrame::OnAddDatabase, this, ID_AddDatabaseButton);
+}
+
+void MyFrame::OnAddDatabase(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    List<String^>^ names = m->GetDatabases();
+    for (int i=0; i<names->Count; i++)
+        if (string(addDatabaseName->GetValue()) == msclr::interop::marshal_as<std::string>(names[i]))
+        {
+            databaseNameUsed->SetLabel("Database name is used");
+            return;
+        }
+
+    m->AddDatabase(gcnew String(string(addDatabaseName->GetLineText(0)).data()));
+    names = m->GetDatabases();
+
+    databaseBox->Clear();
+    for (int i=0; i<names->Count; i++)
+        databaseBox->Append(msclr::interop::marshal_as<std::string>(names[i]));
+
+    delete databaseNameUsed;
+    delete addDatabaseName;
+    delete addDatabase;
+}
+
+void MyFrame::OnDeleteDatabase(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    m->DeleteDatabase(gcnew String(string(databaseBox->GetStringSelection()).data()));
+    List<String^>^ names = m->GetDatabases();
+    databaseBox->Clear();
+    for (int i=0; i<names->Count; i++)
+        databaseBox->Append(msclr::interop::marshal_as<std::string>(names[i]));
+}
+
+void MyFrame::OnAddTableView(wxCommandEvent& event)
+{
+    addTableName = new wxTextCtrl(window, ID_AddTableName, wxEmptyString, wxPoint(260,30), wxSize(110, 20));
+    addTable = new wxButton(window, ID_AddTableButton, "+", wxPoint(380, 30), wxSize(20, 20));
+    tableNameUsed = new wxStaticText(window, wxID_ANY, "", wxPoint(410,30));
+    addTable->Bind(wxEVT_BUTTON, &MyFrame::OnAddTable, this, ID_AddTableButton);
+}
+
+void MyFrame::OnAddTable(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    if (databaseBox->GetValue().empty())
+    {
+        tableNameUsed->SetLabel("Choose database first");
+        return;
+    }
+    List<String^>^ names = m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTables();
+    for (int i=0; i<names->Count; i++)
+        if (string(addTableName->GetValue()) == msclr::interop::marshal_as<std::string>(names[i]))
+        {
+            tableNameUsed->SetLabel("Table name is used");
+            return;
+        }
+
+    m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->AddTable(gcnew String(string(addTableName->GetValue()).data()));
+    names = m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTables();
+
+    tableBox->Clear();
+    for (int i=0; i<names->Count; i++)
+        tableBox->Append(msclr::interop::marshal_as<std::string>(names[i]));
+
+    delete tableNameUsed;
+    delete addTableName;
+    delete addTable;
+}
+
+void MyFrame::OnDeleteTable(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    m->GetDatabase(gcnew String(string(databaseBox->GetStringSelection()).data()))->DeleteTable(gcnew String(string(tableBox->GetValue()).data()));
+    List<String^>^ names = m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTables();
+    tableBox->Clear();
+    for (int i=0; i<names->Count; i++)
+        tableBox->Append(msclr::interop::marshal_as<std::string>(names[i]));
+}
+
+void MyFrame::OnAddColumnView(wxCommandEvent& event)
+{
+    addColumnName = new wxTextCtrl(window, ID_AddColumnName, wxEmptyString, wxPoint(670, 0), wxSize(110, 20));
+    addColumn = new wxButton(window, ID_AddColumnButton, "+", wxPoint(790, 0), wxSize(20, 20));
+    columnNameUsed = new wxStaticText(window, wxID_ANY, "", wxPoint(820,0));
+    columnBox = new wxComboBox(window, ID_ColumnSelected, wxEmptyString, wxPoint(670, 30), wxSize(110, 20), columnName, wxCB_READONLY);
+    addColumn->Bind(wxEVT_BUTTON, &MyFrame::OnAddColumn, this, ID_AddColumnButton);
+}
+
+void MyFrame::OnAddColumn(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    if (tableBox->GetValue().empty())
+    {
+        columnNameUsed->SetLabel("Choose table first");
+        return;
+    }
+
+    if (columnBox->GetValue().empty())
+    {
+        columnNameUsed->SetLabel("Choose type first");
+        return;
+    }
+
+    List<String^>^ names = m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTable(gcnew String(string(tableBox->GetValue()).data()))->GetColumns();
+    for (int i=0; i<names->Count; i++)
+        if (string(addColumnName->GetValue()) == msclr::interop::marshal_as<std::string>(names[i]))
+        {
+            columnNameUsed->SetLabel("Column name is used");
+            return;
+        }
+
+    m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTable(gcnew String(string(tableBox->GetValue()).data()))->AddColumn(gcnew String(string(addColumnName->GetValue()).data()), gcnew String(string(columnBox->GetValue()).data()));
+    RenderGrid();
+
+    delete columnNameUsed;
+    delete columnBox;
+    delete addColumnName;
+    delete addColumn;
+}
+
+void MyFrame::OnDeleteColumn(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    List<String^>^ names = m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTable(gcnew String(string(tableBox->GetValue()).data()))->GetColumns();
+    m->GetDatabase(gcnew String(string(databaseBox->GetStringSelection()).data()))->GetTable(gcnew String(string(tableBox->GetValue()).data()))->DeleteColumn(names[names->Count-1]);
+    RenderGrid();
+}
+
+void MyFrame::OnAddRow(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    if (tableBox->GetValue().empty()) return;
+    m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTable(gcnew String(string(tableBox->GetValue()).data()))->AddRow();
+    RenderGrid();
+}
+
+void MyFrame::OnDeleteRow(wxCommandEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    if (tableBox->GetValue().empty()) return;
+    int rows = m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTable(gcnew String(string(tableBox->GetValue()).data()))->GetRows();
+    m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTable(gcnew String(string(tableBox->GetValue()).data()))->DeleteRow(rows-1);
+    RenderGrid();
+}
+
+void MyFrame::OnGridChanged(wxGridEvent& event)
+{
+    Manager^ m = GlobalObjects::m;
+    int columnIndex = event.GetCol();
+    int rowIndex = event.GetRow();
+    string value = string(grid->GetCellValue(rowIndex, columnIndex));
+
+    List<String^>^ columns = m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTable(gcnew String(string(tableBox->GetValue()).data()))->GetColumns();
+    String^ type = m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTable(gcnew String(string(tableBox->GetValue()).data()))->GetColumn(columns[columnIndex])->GetType();
+
+    if (type == "int"){
+        for(int i=0; i<value.size(); i++)
+            if (isdigit(value[i]) == 0) {grid->SetCellValue(wxGridCellCoords(rowIndex, columnIndex), wxString::Format(wxT("%i"),0)); return;}}
+    else if (type == "double")
+    {
+        bool dot = true;
+        for(int i=0; i<value.size(); i++)
+            if (isdigit(value[i]) == 0)
+                if (dot && value[i] == '.') dot = false;
+                else {grid->SetCellValue(wxGridCellCoords(rowIndex, columnIndex), wxString::Format(wxT("%f"),0.0)); return;}
+    }
+    else if (type == "hex")
+    {
+        if (value[0] != '#' || value.substr(1).find_first_not_of("ABCDEF0123456789") != string::npos || value.size()!=7)
+            {grid->SetCellValue(wxGridCellCoords(rowIndex, columnIndex), "#000000"); return;}
+    }
+    else if (type == "hexInvl")
+    {
+        if (value[0] != '#' || value.substr(1,6).find_first_not_of("ABCDEF0123456789") != string::npos || value.size()!=14 ||
+            value[7] != '#' || value.substr(8).find_first_not_of("ABCDEF0123456789") != string::npos ||
+            value.substr(1,2).compare(value.substr(8,2)) > 0 ||
+            value.substr(3,2).compare(value.substr(10,2)) > 0 ||
+            value.substr(5,2).compare(value.substr(12,2)) > 0)
+            {grid->SetCellValue(wxGridCellCoords(rowIndex, columnIndex), "#000000#000000"); return;}
+    }
+    m->GetDatabase(gcnew String(string(databaseBox->GetValue()).data()))->GetTable(gcnew String(string(tableBox->GetValue()).data()))->GetRow(rowIndex)->ChangeData(gcnew String(value.data()), columnIndex);
+    RenderGrid();
+}
